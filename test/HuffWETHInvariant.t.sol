@@ -26,6 +26,9 @@ contract HuffWETHInvariant is Test {
     }
 
     function invariant_alwaysEnoughToWithdraw() public {
-        assertGe(address(hWeth).balance, hWeth.totalSupply());
+        assertGe(
+            address(hWeth).balance,
+            (handler.totalDepositsAmount() - handler.totalWithdrawalsAmount())
+        );
     }
 }
