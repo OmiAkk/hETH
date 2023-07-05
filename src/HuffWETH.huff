@@ -1,0 +1,459 @@
+// Function Interfaces
+// ERC-20
+#define function totalSupply() view returns (uint256)
+#define function balanceOf(address) view returns (uint256)
+#define function allowance(address,address) view returns (uint256)
+#define function approve(address,uint256) payable returns (bool)
+#define function transfer(address,uint256) payable returns (bool)
+#define function transferFrom(address,address,uint256) payable returns (bool)
+// Metadata
+#define function name() pure returns (string)
+#define function symbol() pure returns (string)
+#define function decimals() pure returns (uint8)
+// WETH
+#define function deposit() payable returns ()
+#define function withdraw(uint256) payable returns ()
+
+// Events
+#define event Approval(address indexed src, address indexed guy, uint wad)
+#define event Transfer(address indexed src, address indexed dst, uint wad)
+#define event Deposit(address indexed dst, uint wad)
+#define event Withdrawal(address indexed src, uint wad)
+
+// Constants
+#define constant WETH_DECIMALS = 0x0000000000000000000000000000000000000000000000000000000000000012 // 18
+#define constant UINT_256_MAX = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+
+// Storage
+#define constant BALANCEOF_SLOT = FREE_STORAGE_POINTER()
+#define constant APPROVAL_SLOT = FREE_STORAGE_POINTER()
+
+// Macros
+// Mappings
+// @notice Get a mapping slot from two keys
+#define macro GET_MAPPING_SLOT_FROM_KEYS(free_mem_ptr) = takes (2) returns (1) {
+	// Input stack: [slot, key]
+	<free_mem_ptr> 0x20 add	// [<free_mem_ptr>+32, slot, key]
+	mstore					// [key] - stored the slot at <free_mem_ptr>+32
+	<free_mem_ptr>			// [<free_mem_ptr>, key]
+	mstore					// [] - stored the key at <free_mem_ptr>
+
+	0x40					// [64] - size of the data to hash
+	<free_mem_ptr>			// [<free_mem_ptr>, 64]
+	sha3					// [slot]
+}
+
+// @notice Load an element onto the stack from two keys
+#define macro LOAD_MAPPING_ELEMENT_FROM_KEYS(free_mem_ptr) = takes (2) returns (1) {
+	// Input stack: [slot, key]
+	GET_MAPPING_SLOT_FROM_KEYS(<free_mem_ptr>)	// [slot]
+	sload										// [value]
+}
+
+// @notice Set a mapping slot from two keys
+#define macro STORE_MAPPING_ELEMENT_FROM_KEYS(free_mem_ptr) = takes (3) returns (0) {
+	// Input stack: [slot, key, value]
+	GET_MAPPING_SLOT_FROM_KEYS(<free_mem_ptr>)	// [slot, value]
+	sstore										// []
+}
+
+// @notice Get a mapping slot from three keys
+#define macro GET_MAPPING_SLOT_FROM_KEYS_2D(free_mem_ptr) = takes(3) returns (1) {
+	// Input stack: [slot, key1, key2]
+	<free_mem_ptr> 0x20 add // [<free_mem_ptr>+32, slot, key1, key2]
+	mstore // [key1, key2]
+
+	<free_mem_ptr> // [<free_mem_ptr>, key1, key2]
+	mstore // [key2]
+
+	// Hash key1 and slot
+	0x40 // [64, key2] - size of the data to hash
+	<free_mem_ptr> // [<free_mem_ptr>, 64, key2]
+	sha3 // [hash, key2]
+
+	// concat the two keys
+	<free_mem_ptr> 0x20 add // [<free_mem_ptr>+32, hash, key2]
+	mstore // [key2]
+
+	// next byte
+	<free_mem_ptr> // [<free_mem_ptr>, key2]
+	mstore // []
+
+	// Hash key2 and hash
+	0x40 // [64]
+	<free_mem_ptr> // [<free_mem_ptr>, 64]
+	sha3
+}
+
+/// @notice Load an element onto the stack from three keys
+#define macro LOAD_MAPPING_ELEMENT_FROM_KEYS_2D(free_mem_ptr) = takes(3) returns(1) {
+	// Input stack: [slot, key1, key2]
+	GET_MAPPING_SLOT_FROM_KEYS_2D(<mem_ptr>) // [slot]
+	sload // [value]
+}
+
+// @notice Set a mapping slot from three keys
+#define macro STORE_MAPPING_ELEMENT_FROM_KEYS_2D(free_mem_ptr) = takes (4) returns (0) {
+	// Input stack: [slot, key1, key2, value]
+	GET_MAPPING_SLOT_FROM_KEYS_2D(<free_mem_ptr>)	// [slot, value]
+	sstore										// []
+}
+
+// WETH
+
+/// @notice Deposit
+/// @notice Deposit ETH and recieve tokens
+#define macro DEPOSIT() = takes (0) returns (0) {
+	caller													// [msg.sender]
+	[BALANCEOF_SLOT] LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00)	// [balance]
+	callvalue add 											// [msg.value+balance]
+	caller													// [msg.sender, msg.value+balance]
+	[BALANCEOF_SLOT] STORE_MAPPING_ELEMENT_FROM_KEYS(0x00)	// []
+	
+	// Emit Deposit event
+	callvalue	// [msg.value]
+	0x00 mstore // []
+	caller // [msg.sender]
+	__EVENT_HASH(Deposit) // [sig, msg.sender]
+	0x20 0x00 // [0, 32, sig, msg.sender]
+	log2 // []
+	
+	0x00 0x00 return // []
+}
+
+/// @notice Withdraw
+/// @notice Burn tokens and recieve ETH
+#define macro WITHDRAW() = takes (0) returns (0) {
+	0x04 calldataload // [amount]
+	dup1 // [amount, amount]
+	caller // [msg.sender, amount, amount]
+	[BALANCEOF_SLOT] // [slot, msg.sender, amount, amount]
+	
+	LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00) // [balanceOf(msg.sender), amount, amount]
+	dup2 dup2 // [balanceOf(msg.sender), amount, balanceOf(msg.sender), amount, amount]
+	lt // [balanceOf(msg.sender)<amount, balanceOf(msg.sender), amount, amount]
+	insufficientBalance jumpi // [balanceOf(msg.sender), amount, amount]
+	
+	sub // [balance-amount, amount]
+	caller // [msg.sender, balance-amount, amount]
+	[BALANCEOF_SLOT] // [slot, msg.sender, balance-amount, amount]
+
+	STORE_MAPPING_ELEMENT_FROM_KEYS(0x00) // [amount]
+
+	// Transfer eth to msg.sender
+	dup1 // [amount, amount]
+	caller // [msg.sender, amount, amount]
+	_TRANSFER_ETH() // [amount]
+
+	// Emit Withdrawal event
+	0x00 // [0x00, amount]
+	mstore // []
+	caller // [msg.sender]
+	__EVENT_HASH(Withdrawal) // [sig, msg.sender]
+	0x20 0x00 // [0x00, 0x20, sig, msg.sender]
+	log2 // []
+	
+	// Return
+	0x00 0x00 return // []
+
+	insufficientBalance:
+		0x00 0x00 revert		// []
+}
+
+/// @notice TotalSupply
+/// @notice Implemented as in the original WETH contract
+#define macro TOTAL_SUPPLY() = takes (0) returns (0) {
+	__VERBATIM(0x47)	// [address(this).balance]
+	0x00 mstore	// []
+	0x20 0x00 return // []
+}
+
+/// @notice Approve
+/// @notice Approves an address to spend an amount of tokens on the caller's behalf
+#define macro APPROVE() = takes (0) returns (0) {
+	0x04 calldataload // [to]
+	caller // [from, to]
+	0x24 calldataload // [value, from, to]
+	dup1 // [value, value, from, to]
+	dup4 // [to, value, value, from, to]
+	caller // [from, to, value, value, from, to]
+	[APPROVAL_SLOT]	// [slot, from, to, value, value, from, to]
+	
+	STORE_MAPPING_ELEMENT_FROM_KEYS_2D(0x00) // [value, from, to]
+
+	// Emit Approval event
+	0x00 mstore // [from, to]
+	__EVENT_HASH(Approval) // [sig, from, to]
+	0x20 0x00 // [0, 32, sig, from, to]
+	log3 // []
+
+	// return true
+	0x01 0x00 mstore // []
+	0x20 0x00 return // []
+}
+
+/// @notice Transfer
+/// @notice Transfers an amount of tokens from the sender to a recipient.
+#define macro TRANSFER() = takes (0) returns (0) {
+	// Setup the stack for the transfer function.
+	0x04 calldataload // [to]
+	caller // [from, to]
+	0x24 calldataload // [value, from, to]
+
+	// Update the balances of the sender and recipient.
+	_TRANSFER_TAKE_FROM() // [value, from, to]
+	_TRANSFER_GIVE_TO() // [value, from, to]
+
+	// Emit the transfer event.
+	0x00 mstore // [from, to]
+	__EVENT_HASH(Transfer) // [sig, from, to]
+	0x20 0x00 // [0, 32, sig, from, to]
+	log3 // []
+
+	// Return "1" to represent a successful transfer
+	0x01 0x00 mstore // []
+	0x20 0x00 return // []
+}
+
+/// @notice Transfer From
+/// @notice Transfers an amount of tokens from an address to a recipient
+#define macro TRANSFER_FROM() = takes (0) returns (0) {
+	0x24 calldataload // [to]
+	0x04 calldataload // [from, to]
+	caller // [msg.sender, from, to]
+	dup2 // [from, msg.sender, from, to]
+	[APPROVAL_SLOT] // [slot, from, msg.sender, from, to]
+
+	// Check for max approval
+	LOAD_MAPPING_ELEMENT_FROM_KEYS_2D(0x00) // [approved, from, to]
+	dup1 // [approved, approved, from, to]
+	0x44 calldataload // [value, approved, approved, from, to]
+
+	// Check isOwner
+	dup4 // [from, value, approved, approved, from, to]
+	caller // [msg.sender, from, value, approved, approved, from, to]
+	eq // [msg.sender==from, value, approved, approved, from, to]
+	approved1 jumpi // [value, approved, approved, from, to]
+
+	// Check max approval
+	dup2  // [approved, value, approved, approved, from, to]
+	[UINT_256_MAX] // [type(uint256).max, approved, value, approved, approved, from, to]
+	eq // [type(uint256).max==approved, value, approved, approved, from, to]
+	approved1 jumpi // [value, approved, approved, from, to]
+
+	// Check has approval
+	gt // [value > approved, approved, from, to]
+	insufficientApproval jumpi // [approved, from, to]
+
+	// Adjust approval
+	0x44 calldataload // [value, approved, from, to]
+	swap1 // [approved, value, from, to]
+	sub // [approved - value => newApprovalValue, from, to]
+	caller // [msg.sender, newApprovalValue, from, to]
+	dup3 // [from, msg.sender, newApprovalValue, from, to]
+	[APPROVAL_SLOT] // [slot, from, msg.sender, newApprovalValue, from, to]
+	STORE_MAPPING_ELEMENT_FROM_KEYS_2D(0x00) // [from, to]
+	approved2 jump // [from, to]
+
+	approved1: // [value, approved, approved, from, to]
+		pop pop pop // [from, to]
+
+	approved2: // [from, to]
+		0x44 calldataload // [value, from, to]
+
+		// Update the balances of the sender and recipient
+		_TRANSFER_TAKE_FROM() // [value, from, to]
+		_TRANSFER_GIVE_TO() // [value, from, to]
+
+		// Emit the transfer event.
+		0x00 mstore // [from, to]
+		__EVENT_HASH(Transfer) // [sig, from, to]
+		0x20 0x00 // [0, 32, sig, from, to]
+		log3 // []
+		
+		// Return "1" to represent a successful transfer.
+		0x01 0x00 mstore // []
+		0x20 0x00 return // []
+
+	insufficientApproval:
+		0x00 0x00 revert // []
+}
+
+/// @notice Transfers an amount of tokens from
+#define macro _TRANSFER_TAKE_FROM() = takes (3) returns (3) {
+	// input stack: [value, from, to]
+	dup2 [BALANCEOF_SLOT] // [slot, from, value, from, to]
+	LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00) // [balance, value, from, to]
+	dup1 dup3 // [value, balance, balance, value, from, to]
+	gt // [value > balance, balance, value, from, to]
+	iszero // [value <= balance, balance, value, from, to]
+	valid jumpi // [balance, value, from, to]
+
+	// Insufficient balance
+	0x00 0x00 revert // []
+
+	// Update the sender's balance
+	valid:
+		dup2 // [value, balance, value, from, to]
+		swap1 // [balance, value, value, from, to]
+		sub // [balance - value, value, from, to]
+		dup3 // [from, balance - value, value, from, to]
+		[BALANCEOF_SLOT] STORE_MAPPING_ELEMENT_FROM_KEYS(0x00) // [value, from, to]
+}
+
+/// @notice Transfers an amount of tokens to another address
+#define macro _TRANSFER_GIVE_TO() = takes (3) returns (3) {
+	// input stack: [value, from, to]
+	dup1 // [value, value, from, to]
+	dup4 // [to, value, value, from, to]
+	[BALANCEOF_SLOT] LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00) // [balance, value, value, from, to]
+	add // [balance+value, value, from, to]
+	dup4 // [to, balance+value, value, from, to]
+	[BALANCEOF_SLOT] STORE_MAPPING_ELEMENT_FROM_KEYS(0x00) // [value, from, to]
+}
+
+/// @notice Name
+/// @notice Returns the name of the token
+/// @dev Seaport method
+#define macro NAME() = takes (0) returns (0) {
+	// Store "Huff Wrapped ETH" (0x48756666205772617070656420455448)
+	0x20 0x00 mstore // []
+	0x1048756666205772617070656420455448 0x30 mstore // []
+
+	// Return the string
+	0x60 0x00 // [0, 96]
+	return // []
+}
+
+/// @notice Symbol
+/// @notice Returns the symbol of the token
+/// @dev Seaport method
+#define macro SYMBOL() = takes (0) returns (0) {
+	// Store "HETH" (0x48455448)
+	0x20 0x00 mstore // []
+	0x448455448 0x24 mstore // []
+
+	// Return the string
+	0x60 0x00 // [0, 96]
+	return // []
+}
+
+/// @notice decimals
+/// @notice Returns the token decimal representation
+#define macro DECIMALS() = takes (0) returns (0) {
+	[WETH_DECIMALS] 0x00 // [0x00, 18]
+	mstore // []
+	
+	0x20 0x00 // [0x00, 32]
+	return // []
+}
+
+/// @notice Balance Of
+/// @notice Returns the token balance of an address
+#define macro BALANCE_OF() = takes (0) returns (0) {
+	0x04 calldataload // [account]
+	[BALANCEOF_SLOT] // [BALANCEOF_SLOT, account]
+	LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00) // [balance]
+	0x00 mstore // []
+	0x20 0x00 return // []
+}
+
+/// @notice Allowance
+/// @notice Returns the amount which a spender is allowed to transfer on behalf of an owner
+#define macro ALLOWANCE() = takes (0) returns (0) {
+	0x24 calldataload // [to]
+	0x04 calldataload // [from, to]
+	[APPROVAL_SLOT] // [slot, from, to]
+	LOAD_MAPPING_ELEMENT_FROM_KEYS_2D(0x00) // [allowance]
+	0x00 mstore // []
+	0x20 0x00 return // []
+}
+
+/// @notice Transfers an `amount` of ETH to the address `to`
+#define macro _TRANSFER_ETH() = takes (2) returns (0) {
+	// Input stack: [to, amount]
+	
+	// Perform a call
+	0x00 0x00 0x00 0x00 // [0x00, 0x00, 0x00, 0x00, to, amount]
+	swap5 swap1 swap4 // [to, amount, 0x00, 0x00, 0x00, 0x00]
+	gas call // [call_successful]
+	success jumpi // []
+
+	// Revert on fail
+	0x00 0x00 revert
+
+	success:
+}
+
+// 0x06fdde03 name()
+// 0x095ea7b3 approve(address,uint256)
+// 0x18160ddd totalSupply()
+// 0x23b872dd transferFrom(address,address,uint256)
+// 0x2e1a7d4d withdraw(uint256)
+// 0x313ce567 decimals()
+// 0x70a08231 balanceOf(address)
+// 0x95d89b41 symbol()
+// 0xa9059cbb transfer(address, uint256)
+// 0xd0e30db0 deposit()
+// 0xdd62ed3e allowance(address, address)
+
+// Function Dispatching
+#define macro MAIN() = takes (0) returns (0) {
+	0x00 calldataload 0xE0 shr // [selector]
+
+	dup1 __FUNC_SIG(decimals) lt pivot0 jumpi
+
+        dup1 __FUNC_SIG(totalSupply) lt pivot00 jumpi
+            dup1 __FUNC_SIG(name)               eq nameJump             jumpi
+            dup1 __FUNC_SIG(approve)            eq approveJump          jumpi
+            dup1 __FUNC_SIG(totalSupply)        eq totalSupplyJump      jumpi
+            not_found jump
+
+        pivot00:
+            dup1 __FUNC_SIG(transferFrom)       eq transferFromJump     jumpi
+            dup1 __FUNC_SIG(withdraw)           eq withdrawJump         jumpi
+			dup1 __FUNC_SIG(decimals)           eq decimalsJump         jumpi
+            not_found jump
+
+    pivot0:
+
+        dup1 __FUNC_SIG(transfer) lt pivot11 jumpi
+            dup1 __FUNC_SIG(balanceOf)          eq balanceOfJump        jumpi
+            dup1 __FUNC_SIG(symbol)             eq symbolJump           jumpi
+            dup1 __FUNC_SIG(transfer)             eq transferJump           jumpi
+            not_found jump
+
+        pivot11:
+            dup1 __FUNC_SIG(deposit)           eq depositJump         jumpi
+            dup1 __FUNC_SIG(allowance)          eq allowanceJump        jumpi
+
+    not_found:
+    	0x00 dup1 revert
+
+    nameJump:
+        NAME()
+	symbolJump:
+		SYMBOL()
+	allowanceJump:
+        ALLOWANCE()
+    approveJump:
+        APPROVE()
+    balanceOfJump:
+        BALANCE_OF()
+    decimalsJump:
+        DECIMALS()
+    nameJump:
+        NAME()
+    symbolJump:
+        SYMBOL()
+    totalSupplyJump:
+        TOTAL_SUPPLY()
+    transferFromJump:
+        TRANSFER_FROM()
+    transferJump:
+        TRANSFER()
+	withdrawJump:
+		WITHDRAW()
+	depositJump:
+		DEPOSIT()
+}
