@@ -1,0 +1,13 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 85 85" width="85" height="85">
+	<title>Phoenician_heth-svg</title>
+	<defs>
+		<image  width="85" height="85" id="img1" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFUAAABVAQMAAAACOzoZAAAAAXNSR0IB2cksfwAAAANQTFRF////p8QbyAAAABFJREFUeJxjYBgFo2AUjEQAAAP8AAFiOeL/AAAAAElFTkSuQmCC"/>
+	</defs>
+	<style>
+		.s0 { fill: #000000 } 
+	</style>
+	<g id="layer1">
+		<use id="rect2824" href="#img1" x="0" y="0"/>
+		<path id="rect2824 copy" fill-rule="evenodd" class="s0" d="m66.9 11.7v61.6h-48.8v-61.6zm-40.9 26.8h33v-18.9h-33zm0 26.7h33v-19.3h-33z"/>
+	</g>
+</svg>
