@@ -32,6 +32,9 @@ interface IWETH {
     ) external returns (bool);
 
     /* WETH */
+    event Deposit(address indexed from, uint value);
+    event Withdrawal(address indexed from, uint value);
+
     function deposit() external payable;
 
     function withdraw(uint256) external payable;
