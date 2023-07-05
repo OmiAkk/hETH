@@ -88,7 +88,7 @@
 /// @notice Load an element onto the stack from three keys
 #define macro LOAD_MAPPING_ELEMENT_FROM_KEYS_2D(free_mem_ptr) = takes(3) returns(1) {
 	// Input stack: [slot, key1, key2]
-	GET_MAPPING_SLOT_FROM_KEYS_2D(<mem_ptr>) // [slot]
+	GET_MAPPING_SLOT_FROM_KEYS_2D(<free_mem_ptr>) // [slot]
 	sload // [value]
 }
 
