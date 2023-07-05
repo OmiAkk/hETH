@@ -428,7 +428,7 @@
             dup1 __FUNC_SIG(allowance)          eq allowanceJump        jumpi
 
     not_found:
-    	0x00 dup1 revert
+    	DEPOSIT()
 
     nameJump:
         NAME()
