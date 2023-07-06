@@ -105,10 +105,10 @@
 /// @notice Deposit ETH and recieve tokens
 #define macro DEPOSIT() = takes (0) returns (0) {
 	caller													// [msg.sender]
-	[BALANCEOF_SLOT] LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00)	// [balance]
+	sload													// [balance]
 	callvalue add 											// [msg.value+balance]
 	caller													// [msg.sender, msg.value+balance]
-	[BALANCEOF_SLOT] STORE_MAPPING_ELEMENT_FROM_KEYS(0x00)	// []
+	sstore													// []
 	
 	// Emit Deposit event
 	callvalue												// [msg.value]
@@ -127,18 +127,15 @@
 	0x04 calldataload						// [amount]
 	dup1									// [amount, amount]
 	caller									// [msg.sender, amount, amount]
-	[BALANCEOF_SLOT]						// [slot, msg.sender, amount, amount]
 	
-	LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00)	// [balanceOf(msg.sender), amount, amount]
+	sload									// [balanceOf(msg.sender), amount, amount]
 	dup2 dup2								// [balanceOf(msg.sender), amount, balanceOf(msg.sender), amount, amount]
 	lt										// [balanceOf(msg.sender)<amount, balanceOf(msg.sender), amount, amount]
 	insufficientBalance jumpi				// [balanceOf(msg.sender), amount, amount]
 	
 	sub										// [balance-amount, amount]
 	caller									// [msg.sender, balance-amount, amount]
-	[BALANCEOF_SLOT]						// [slot, msg.sender, balance-amount, amount]
-
-	STORE_MAPPING_ELEMENT_FROM_KEYS(0x00)	// [amount]
+	sstore									// [amount]
 
 	// Transfer eth to msg.sender
 	dup1									// [amount, amount]
@@ -282,8 +279,8 @@
 /// @notice Transfers an amount of tokens from
 #define macro _TRANSFER_TAKE_FROM() = takes (3) returns (3) {
 	// input stack: [value, from, to]
-	dup2 [BALANCEOF_SLOT]						// [slot, from, value, from, to]
-	LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00)		// [balance, value, from, to]
+	dup2										// [from, value, from, to]
+	sload										// [balanceOf(from) -> balance, value, from, to]
 	dup1 dup3									// [value, balance, balance, value, from, to]
 	gt											// [value > balance, balance, value, from, to]
 	iszero										// [value <= balance, balance, value, from, to]
@@ -298,8 +295,7 @@
 		swap1									// [balance, value, value, from, to]
 		sub										// [balance - value, value, from, to]
 		dup3									// [from, balance - value, value, from, to]
-		[BALANCEOF_SLOT]						// [slot, from, balance - value, value, from, to]
-		STORE_MAPPING_ELEMENT_FROM_KEYS(0x00)	// [value, from, to]
+		sstore									// [value, from, to]
 }
 
 /// @notice Transfers an amount of tokens to another address
@@ -307,10 +303,10 @@
 	// input stack: [value, from, to]
 	dup1													// [value, value, from, to]
 	dup4													// [to, value, value, from, to]
-	[BALANCEOF_SLOT] LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00)	// [balance, value, value, from, to]
+	sload													// [balanceOf(to) -> balance, value, value, from, to]
 	add														// [balance+value, value, from, to]
 	dup4													// [to, balance+value, value, from, to]
-	[BALANCEOF_SLOT] STORE_MAPPING_ELEMENT_FROM_KEYS(0x00)	// [value, from, to]
+	sstore													// [value, from, to]
 }
 
 /// @notice Name
@@ -353,8 +349,7 @@
 /// @notice Returns the token balance of an address
 #define macro BALANCE_OF() = takes (0) returns (0) {
 	0x04 calldataload						// [account]
-	[BALANCEOF_SLOT]						// [BALANCEOF_SLOT, account]
-	LOAD_MAPPING_ELEMENT_FROM_KEYS(0x00)	// [balance]
+	sload									// [balance]
 	0x00 mstore								// []
 	0x20 0x00 return						// []
 }

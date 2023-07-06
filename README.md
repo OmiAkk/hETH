@@ -6,6 +6,7 @@ hETH — gas optimised WETH implementation in Huff. ⛽
 
 ## ❗ Important differences with the original WETH contract:
 - All functions are **payable** to make the contract as gas-optimized as possible.
+- *balanceOf(address)* is stored at storage slot **address**. E. g. if your address is 0x1234...., the slot with your balance is **0x1234...**. This optimizes the contract, as we don't have to calculate the mapping slot. Storage collisions are unlikely to happen.
 
 ## 🔧 Test the contracts
 1. Make sure you have the [Huff Compiler](https://docs.huff.sh/get-started/installing/) installed.
