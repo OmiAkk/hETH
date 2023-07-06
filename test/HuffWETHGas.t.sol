@@ -3,6 +3,7 @@ pragma solidity ^0.8.15;
 
 import "../src/interfaces/IWETH.sol";
 import "../src/interfaces/IWETHEvents.sol";
+import "./mock/DeployWETH9.sol";
 import "foundry-huff/HuffDeployer.sol";
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
@@ -12,7 +13,9 @@ contract HuffWethGasTest is Test, GasSnapshot, IWETHEvents {
     address private alice = makeAddr("alice");
     address private bob = makeAddr("bob");
     address private charlie = makeAddr("charlie");
+
     IWETH public hETH;
+    IWETH public wETH;
 
     function setUp() public {
         // Deploy hETH contract
@@ -33,7 +36,33 @@ contract HuffWethGasTest is Test, GasSnapshot, IWETHEvents {
 
         // Snapshot contract size
         snapSize("hETH_contract_size", address(hETH));
+
+        /*
+         * Deploy WETH9 for comparsion
+         */
+        wETH = IWETH(DeployWETH9.deploy());
+        assertEq(wETH.symbol(), "WETH");
+
+        // Deposit from Bob
+        vm.deal(bob, 1 ether);
+        vm.prank(bob);
+        wETH.deposit{value: 1 ether}();
+        // Approve 1 wETH to Alice from Bob
+        vm.prank(bob);
+        wETH.approve(alice, 1 ether);
+
+        // Deposit from Alice
+        vm.deal(alice, 10 ether);
+        vm.prank(alice);
+        wETH.deposit{value: 1 ether}(); // Alice has 1 wETH from the start
+
+        // Snapshot contract size
+        snapSize("wETH_contract_size", address(wETH));
     }
+
+    ///////////////////////////////////////////////////
+    //////////////// hETH Gas Snapshots ///////////////
+    ///////////////////////////////////////////////////
 
     function testName() public {
         vm.startPrank(alice);
@@ -225,5 +254,201 @@ contract HuffWethGasTest is Test, GasSnapshot, IWETHEvents {
         vm.stopPrank();
 
         assertEq(hETH.balanceOf(bob), 0);
+    }
+
+    ///////////////////////////////////////////////////
+    //////////////// WETH Gas Snapshots ///////////////
+    ///////////////////////////////////////////////////
+
+    function testName_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH.name()");
+
+        wETH.name();
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testSymbol_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH.symbol()");
+
+        wETH.symbol();
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testDecimals_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH.decimals()");
+
+        wETH.decimals();
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testFallbackWithExistingBalance_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH_callback_deposit_with_existing_balance");
+
+        address(wETH).call{value: 1 ether}("");
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testDepositWithExistingBalance_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH_deposit()_with_existing_balance");
+
+        wETH.deposit{value: 1 ether}();
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testPartialWithdraw_weth() public {
+        // Withdraw 0.5 ETH
+        vm.startPrank(alice);
+        snapStart("wETH_partial_withdraw()");
+
+        wETH.withdraw((1 ether) / 2);
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testFullWithdraw_weth() public {
+        // Withdraw 1 ETH
+        vm.startPrank(alice);
+        snapStart("wETH_full_withdraw()");
+
+        wETH.withdraw(1 ether);
+
+        snapEnd();
+        vm.stopPrank();
+        assertEq(wETH.balanceOf(alice), 0);
+    }
+
+    function testTotalSupply_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH.totalSupply()");
+
+        wETH.totalSupply();
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testFullTransferToAccountWithZeroBalance_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH.full_transfer_to_account_with_zero_balance()");
+
+        wETH.transfer(charlie, 1 ether);
+
+        snapEnd();
+        vm.stopPrank();
+        assertEq(wETH.balanceOf(alice), 0);
+    }
+
+    function testPartialTransferToAccountWithZeroBalance_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH.partial_transfer_to_account_with_zero_balance()");
+
+        wETH.transfer(charlie, (1 ether) / 2);
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testFullTransferToAccountWithNonZeroBalance_weth() public {
+        assertGt(wETH.balanceOf(bob), 0);
+        vm.startPrank(alice);
+        snapStart("wETH.full_transfer_to_account_with_NON_zero_balance()");
+
+        wETH.transfer(bob, 1 ether);
+
+        snapEnd();
+        vm.stopPrank();
+        assertEq(wETH.balanceOf(alice), 0);
+    }
+
+    function testPartialTransferToAccountWithNonZeroBalance_weth() public {
+        assertGt(wETH.balanceOf(bob), 0);
+        vm.startPrank(alice);
+        snapStart("wETH.partial_transfer_to_account_with_NON_zero_balance");
+
+        wETH.transfer(bob, (1 ether) / 2);
+
+        snapEnd();
+        vm.stopPrank();
+        assertGt(wETH.balanceOf(alice), 0);
+    }
+
+    function testFirstApprove_weth() public {
+        // Give Bob max approval
+        vm.startPrank(alice);
+        snapStart("wETH.setting_nonzero_approval_from_zero");
+
+        wETH.approve(bob, type(uint256).max);
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testChangeApprove_weth() public {
+        vm.startPrank(alice);
+
+        wETH.approve(bob, 100);
+
+        // Give Bob max approval
+        snapStart("wETH.changing_nonzero_approval_to_nonzero");
+
+        wETH.approve(bob, type(uint256).max);
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testRevokeApprove_weth() public {
+        vm.startPrank(alice);
+
+        wETH.approve(bob, 100);
+
+        // Revoke approval
+        snapStart("wETH.changing_nonzero_approval_to_zero");
+
+        wETH.approve(bob, 0);
+
+        snapEnd();
+        vm.stopPrank();
+    }
+
+    function testPartialTransferFrom_weth() public {
+        // Transfer 0.5 wETH
+        vm.startPrank(alice);
+        snapStart("wETH.partial_transferFrom_to_account_with_zero_balance");
+
+        wETH.transferFrom(bob, charlie, (1 ether) / 2);
+
+        snapEnd();
+        vm.stopPrank();
+
+        assertGt(wETH.balanceOf(bob), 0);
+    }
+
+    function testFullTransferFrom_weth() public {
+        vm.startPrank(alice);
+        snapStart("wETH.full_transferFrom_to_account_with_zero_balance");
+
+        wETH.transferFrom(bob, charlie, 1 ether);
+
+        snapEnd();
+        vm.stopPrank();
+
+        assertEq(wETH.balanceOf(bob), 0);
     }
 }
