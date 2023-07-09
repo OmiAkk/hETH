@@ -26,6 +26,7 @@
 
 /* Macros */
 // Mappings
+
 // @notice Get a mapping slot from two keys
 #define macro GET_MAPPING_SLOT_FROM_KEYS(free_mem_ptr) = takes (2) returns (1) {
 	// Input stack: [slot, key]
@@ -51,48 +52,6 @@
 	// Input stack: [slot, key, value]
 	GET_MAPPING_SLOT_FROM_KEYS(<free_mem_ptr>)	// [slot, value]
 	sstore										// []
-}
-
-// @notice Get a mapping slot from three keys
-#define macro GET_MAPPING_SLOT_FROM_KEYS_2D(free_mem_ptr) = takes(3) returns (1) {
-	// Input stack: [slot, key1, key2]
-	<free_mem_ptr> 0x20 add		// [<free_mem_ptr>+32, slot, key1, key2]
-	mstore						// [key1, key2]
-
-	<free_mem_ptr>				// [<free_mem_ptr>, key1, key2]
-	mstore						// [key2]
-
-	// Hash key1 and slot
-	0x40						// [64, key2] - size of the data to hash
-	<free_mem_ptr>				// [<free_mem_ptr>, 64, key2]
-	sha3						// [hash, key2]
-
-	// concat the two keys
-	<free_mem_ptr> 0x20 add		// [<free_mem_ptr>+32, hash, key2]
-	mstore						// [key2]
-
-	// next byte
-	<free_mem_ptr>				// [<free_mem_ptr>, key2]
-	mstore						// []
-
-	// Hash key2 and hash
-	0x40						// [64]
-	<free_mem_ptr>				// [<free_mem_ptr>, 64]
-	sha3
-}
-
-/// @notice Load an element onto the stack from three keys
-#define macro LOAD_MAPPING_ELEMENT_FROM_KEYS_2D(free_mem_ptr) = takes(3) returns(1) {
-	// Input stack: [slot, key1, key2]
-	GET_MAPPING_SLOT_FROM_KEYS_2D(<free_mem_ptr>)	// [slot]
-	sload											// [value]
-}
-
-// @notice Set a mapping slot from three keys
-#define macro STORE_MAPPING_ELEMENT_FROM_KEYS_2D(free_mem_ptr) = takes (4) returns (0) {
-	// Input stack: [slot, key1, key2, value]
-	GET_MAPPING_SLOT_FROM_KEYS_2D(<free_mem_ptr>)	// [slot, value]
-	sstore											// []
 }
 
 // WETH
